@@ -85,10 +85,14 @@
         const ageHours = (Date.now() - new Date(r.time).getTime()) / 3600000;
         const fade = Math.max(0.25, 1 - ageHours / 3);
         L.circleMarker([r.lat, r.lng], {
-          radius: 12, color: COLORS[r.status], fillColor: COLORS[r.status],
-          fillOpacity: fade, opacity: fade
+          radius: r.confirmed ? 12 : 9,
+          color: COLORS[r.status], fillColor: COLORS[r.status],
+          fillOpacity: r.confirmed ? fade : 0.1,
+          opacity: fade,
+          dashArray: r.confirmed ? null : '4 4'
         }).addTo(pins).bindPopup(
-          LABELS[r.status] + '<br>' + new Date(r.time).toLocaleTimeString()
+          LABELS[r.status] + (r.confirmed ? '' : ' (unconfirmed)') +
+          '<br>' + new Date(r.time).toLocaleTimeString()
         );
       });
     } catch (err) {
@@ -105,15 +109,23 @@
       let id = '';
       try { id = localStorage.getItem('id') || (localStorage.id = crypto.randomUUID()); } catch (e) {}
       try {
-        await fetch(API, {
+        const res = await fetch(API, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({
             lat: pos.coords.latitude, lng: pos.coords.longitude, status, device: id
           })
         });
-        msg.textContent = 'Salamat! Report sent.';
-        loadPins();
+        let out = {};
+        try { out = await res.json(); } catch (e) {}
+        if (out.result === 'duplicate') {
+          msg.textContent = 'You already reported this spot. Try again in 2 hours.';
+        } else if (out.result === 'invalid') {
+          msg.textContent = 'Report rejected. Check your location and try again.';
+        } else {
+          msg.textContent = 'Salamat! Report sent.';
+          loadPins();
+        }
       } catch (err) {
         msg.textContent = 'Report not sent. Try again.';
       }
