@@ -198,7 +198,7 @@
   msg.textContent = HINTS.flood;
 
 
-  // Tabs
+
   function switchTab(type) {
     currentTab = type;
     ['flood', 'traffic'].forEach(t => {
@@ -209,7 +209,7 @@
   }
 
 
-  // Map
+
   const map = L.map('map').setView([14.586, 121.176], 14);
   L.maplibreGL({
     style: 'https://tiles.openfreemap.org/styles/positron',
@@ -217,19 +217,20 @@
   }).addTo(map);
 
 
-  // Your location: always tracked, and the map follows you until you pan away.
+
   let meMarker = null, meCircle = null, lastPos = null, lastFixTime = 0;
   let following = false, firstFix = true, wakeLock = null;
   const locateBtn = document.getElementById('locateBtn');
 
-  // Blue button = following you. White button = you panned away.
+
+
   function setFollowing(on) {
     following = on;
     locateBtn.classList.toggle('on', on);
     if (on) keepAwake(); else releaseWake();
   }
 
-  // Tap the button to jump back to your position and follow again
+
   function locateMe() {
     setFollowing(true);
     if (lastPos) {
@@ -240,7 +241,7 @@
     }
   }
 
-  // Dragging the map with your finger pauses following
+
   map.on('dragstart', () => setFollowing(false));
 
   map.on('locationfound', e => {
@@ -268,14 +269,14 @@
 
   map.on('locationerror', e => {
     locateBtn.classList.remove('busy');
-    // Brief GPS hiccups are normal while moving; only warn if permission is denied or we never got a fix
+
     if (e.code === 1 || !lastPos) {
       setFollowing(false);
       msg.textContent = 'Could not find your location. Turn on GPS and allow location for this site.';
     }
   });
 
-  // Keep the screen on while following (works on most current phones)
+
   async function keepAwake() {
     try { if ('wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
   }
@@ -287,12 +288,12 @@
     if (document.visibilityState === 'visible' && following) { wakeLock = null; keepAwake(); }
   });
 
-  // Start tracking and following as soon as the page opens
+
   setFollowing(true);
   map.locate({ watch: true, enableHighAccuracy: true, timeout: 30000 });
 
 
-  // Pins
+
   const pins = L.layerGroup().addTo(map);
 
   function pinIcon(type, status, confirmed, fade) {
@@ -329,8 +330,7 @@
   }
 
 
-  // Get the position for a report: reuse the live tracking fix if it is fresh,
-  // otherwise ask the phone once (without forcing slow high-accuracy GPS).
+
   function getPosition() {
     return new Promise((resolve, reject) => {
       if (lastPos && Date.now() - lastFixTime < 30000) {
@@ -345,7 +345,7 @@
     });
   }
 
-  // Send a report using the phone's location
+
   async function report(type, status) {
     if (navigator.vibrate) navigator.vibrate(30);
     if (!API) { msg.textContent = 'Setup needed: paste your Apps Script URL into index.html.'; return; }
@@ -388,7 +388,7 @@
   }
 
 
-  // Undo (available for 30 seconds after a report)
+
   let undoTimer;
   function showUndo(id) {
     const bar = document.getElementById('undoBar');
@@ -417,7 +417,7 @@
     }
   }
 
-  // Support popup
+
   function toggleSupport(show) {
     document.getElementById('supportModal').classList.toggle('show', show);
   }
@@ -426,7 +426,7 @@
   setInterval(loadPins, 60000);
 
 
-  // Install-as-app support
+
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 </script>
 </body>
