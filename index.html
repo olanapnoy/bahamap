@@ -73,6 +73,8 @@
     box-shadow: 0 2px 12px rgba(0,0,0,0.35); text-align: center; font-size: 14px;
   }
   #undoBar button { background: #666; margin-left: 8px; padding: 8px 16px; }
+
+  /* Support button and popup */
   #supportBtn {
     position: absolute; top: 10px; right: 10px; z-index: 1000;
     background: #fff; color: #c2185b; padding: 8px 12px; font-size: 14px;
@@ -96,6 +98,22 @@
   }
   .donate-link.alt { background: #0070ba; }
   #supportBox .close { background: #666; width: 100%; margin-top: 6px; }
+
+  /* Locate / follow button and blue dot */
+  #locateBtn {
+    position: absolute; right: 10px; bottom: 95px; z-index: 1000;
+    width: 46px; height: 46px; padding: 0; border-radius: 50%;
+    background: #fff; color: #1d4ed8; box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #locateBtn:active { transform: translateY(2px); box-shadow: none; }
+  #locateBtn.busy { opacity: 0.6; }
+  #locateBtn.on { background: #1a73e8; color: #fff; }
+  .me-dot {
+    width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%;
+    background: #1a73e8; border: 3px solid #fff;
+    box-shadow: 0 0 0 2px rgba(26,115,232,0.35), 0 1px 4px rgba(0,0,0,0.4);
+  }
 </style>
 </head>
 <body>
@@ -106,6 +124,13 @@
     Wrong button?
     <button onclick="undoReport()">Undo</button>
   </div>
+  <button id="locateBtn" onclick="locateMe()" aria-label="Go to my location">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="12" cy="12" r="4"/>
+      <line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/>
+      <line x1="1" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="23" y2="12"/>
+    </svg>
+  </button>
 </div>
 
 <div id="panel">
@@ -173,6 +198,7 @@
   msg.textContent = HINTS.flood;
 
 
+  // Tabs
   function switchTab(type) {
     currentTab = type;
     ['flood', 'traffic'].forEach(t => {
@@ -183,14 +209,89 @@
   }
 
 
+  // Map
   const map = L.map('map').setView([14.586, 121.176], 14);
   L.maplibreGL({
     style: 'https://tiles.openfreemap.org/styles/positron',
     attribution: '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/" target="_blank">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
   }).addTo(map);
-  map.locate({ setView: true, maxZoom: 16 });
 
 
+  // Your location: always tracked, and the map follows you until you pan away.
+  let meMarker = null, meCircle = null, lastPos = null;
+  let following = false, firstFix = true, wakeLock = null;
+  const locateBtn = document.getElementById('locateBtn');
+
+  // Blue button = following you. White button = you panned away.
+  function setFollowing(on) {
+    following = on;
+    locateBtn.classList.toggle('on', on);
+    if (on) keepAwake(); else releaseWake();
+  }
+
+  // Tap the button to jump back to your position and follow again
+  function locateMe() {
+    setFollowing(true);
+    if (lastPos) {
+      map.setView(lastPos, Math.max(map.getZoom(), 17));
+    } else {
+      locateBtn.classList.add('busy');
+      msg.textContent = 'Finding your location...';
+    }
+  }
+
+  // Dragging the map with your finger pauses following
+  map.on('dragstart', () => setFollowing(false));
+
+  map.on('locationfound', e => {
+    lastPos = e.latlng;
+    locateBtn.classList.remove('busy');
+    if (meMarker) {
+      meMarker.setLatLng(e.latlng);
+      meCircle.setLatLng(e.latlng).setRadius(e.accuracy);
+    } else {
+      meCircle = L.circle(e.latlng, {
+        radius: e.accuracy, color: '#1a73e8', weight: 1, fillOpacity: 0.12, interactive: false
+      }).addTo(map);
+      meMarker = L.marker(e.latlng, {
+        icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }),
+        interactive: false, zIndexOffset: 1000
+      }).addTo(map);
+    }
+    if (following) {
+      if (firstFix) map.setView(e.latlng, Math.max(map.getZoom(), 17));
+      else map.panTo(e.latlng);
+    }
+    firstFix = false;
+  });
+
+  map.on('locationerror', e => {
+    locateBtn.classList.remove('busy');
+    // Brief GPS hiccups are normal while moving; only warn if permission is denied or we never got a fix
+    if (e.code === 1 || !lastPos) {
+      setFollowing(false);
+      msg.textContent = 'Could not find your location. Turn on GPS and allow location for this site.';
+    }
+  });
+
+  // Keep the screen on while following (works on most current phones)
+  async function keepAwake() {
+    try { if ('wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  }
+  function releaseWake() {
+    try { if (wakeLock) wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && following) { wakeLock = null; keepAwake(); }
+  });
+
+  // Start tracking and following as soon as the page opens
+  setFollowing(true);
+  map.locate({ watch: true, enableHighAccuracy: true, timeout: 30000 });
+
+
+  // Pins
   const pins = L.layerGroup().addTo(map);
 
   function pinIcon(type, status, confirmed, fade) {
@@ -227,6 +328,7 @@
   }
 
 
+  // Send a report using the phone's GPS
   function report(type, status) {
     if (navigator.vibrate) navigator.vibrate(30);
     if (!API) { msg.textContent = 'Setup needed: paste your Apps Script URL into index.html.'; return; }
@@ -265,6 +367,7 @@
   }
 
 
+  // Undo (available for 30 seconds after a report)
   let undoTimer;
   function showUndo(id) {
     const bar = document.getElementById('undoBar');
@@ -293,6 +396,7 @@
     }
   }
 
+  // Support popup
   function toggleSupport(show) {
     document.getElementById('supportModal').classList.toggle('show', show);
   }
@@ -301,6 +405,7 @@
   setInterval(loadPins, 60000);
 
 
+  // Install-as-app support
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 </script>
 </body>
