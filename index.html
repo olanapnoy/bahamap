@@ -56,15 +56,16 @@
   button.tab.active { background: var(--blue); color: #fff; }
   button.tab:active { transform: none; box-shadow: none; filter: brightness(0.95); }
 
-  /* Map pins: flood = round with a drop, traffic = rounded square with a car */
-  .pin {
-    width: 100%; height: 100%; box-sizing: border-box;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px; border: 3px solid var(--c); background: var(--c);
+  /* Map pins: the sharp tip sits on the exact spot. Flood = round head, traffic = square head */
+  .pin { position: relative; width: 100%; height: 100%; }
+  .pin svg { width: 100%; height: 100%; display: block; overflow: visible;
+             filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45)); }
+  .pin path { fill: var(--c); stroke: #fff; stroke-width: 2; }
+  .pin.maybe path { fill: #fff; stroke: var(--c); stroke-dasharray: 4 3; }
+  .pin .em {
+    position: absolute; left: 0; right: 0; top: 7%; height: 59%;
+    display: flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1;
   }
-  .pin.flood { border-radius: 50%; }
-  .pin.traffic { border-radius: 7px; }
-  .pin.maybe { background: #fff; border-style: dashed; }
 
   /* Undo bar */
   #undoBar {
@@ -111,8 +112,8 @@
   #locateBtn.on { background: #1a73e8; color: #fff; }
   .me-dot {
     width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%;
-    background: #1a73e8; border: 3px solid #fff;
-    box-shadow: 0 0 0 2px rgba(26,115,232,0.35), 0 1px 4px rgba(0,0,0,0.4);
+    background: #1a73e8; border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(26,115,232,0.35);
   }
 </style>
 </head>
@@ -198,7 +199,7 @@
   msg.textContent = HINTS.flood;
 
 
-
+  // Tabs
   function switchTab(type) {
     currentTab = type;
     ['flood', 'traffic'].forEach(t => {
@@ -209,7 +210,7 @@
   }
 
 
-
+  // Map
   const map = L.map('map').setView([14.586, 121.176], 14);
   L.maplibreGL({
     style: 'https://tiles.openfreemap.org/styles/positron',
@@ -217,20 +218,19 @@
   }).addTo(map);
 
 
-
+  // Your location: always tracked, and the map follows you until you pan away.
   let meMarker = null, meCircle = null, lastPos = null, lastFixTime = 0;
   let following = false, firstFix = true, wakeLock = null;
   const locateBtn = document.getElementById('locateBtn');
 
-
-
+  // Blue button = following you. White button = you panned away.
   function setFollowing(on) {
     following = on;
     locateBtn.classList.toggle('on', on);
     if (on) keepAwake(); else releaseWake();
   }
 
-
+  // Tap the button to jump back to your position and follow again
   function locateMe() {
     setFollowing(true);
     if (lastPos) {
@@ -241,7 +241,7 @@
     }
   }
 
-
+  // Dragging the map with your finger pauses following
   map.on('dragstart', () => setFollowing(false));
 
   map.on('locationfound', e => {
@@ -253,11 +253,11 @@
       meCircle.setLatLng(e.latlng).setRadius(e.accuracy);
     } else {
       meCircle = L.circle(e.latlng, {
-        radius: e.accuracy, color: '#1a73e8', weight: 1, fillOpacity: 0.12, interactive: false
+        radius: e.accuracy, color: '#1a73e8', weight: 1, opacity: 0.4, fillOpacity: 0.06, interactive: false
       }).addTo(map);
       meMarker = L.marker(e.latlng, {
-        icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }),
-        interactive: false, zIndexOffset: 1000
+        icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }),
+        interactive: false, zIndexOffset: -1000
       }).addTo(map);
     }
     if (following) {
@@ -269,14 +269,14 @@
 
   map.on('locationerror', e => {
     locateBtn.classList.remove('busy');
-
+    // Brief GPS hiccups are normal while moving; only warn if permission is denied or we never got a fix
     if (e.code === 1 || !lastPos) {
       setFollowing(false);
       msg.textContent = 'Could not find your location. Turn on GPS and allow location for this site.';
     }
   });
 
-
+  // Keep the screen on while following (works on most current phones)
   async function keepAwake() {
     try { if ('wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
   }
@@ -288,21 +288,30 @@
     if (document.visibilityState === 'visible' && following) { wakeLock = null; keepAwake(); }
   });
 
-
+  // Start tracking and following as soon as the page opens
   setFollowing(true);
   map.locate({ watch: true, enableHighAccuracy: true, timeout: 30000 });
 
 
-
+  // Pins
   const pins = L.layerGroup().addTo(map);
 
+  // Teardrop (flood) and pointed-square (traffic) shapes. The tip is the real location.
+  const PIN_PATH = {
+    flood: 'M17 43 C13 37 3 27 3 16 A14 14 0 0 1 31 16 C31 27 21 37 17 43 Z',
+    traffic: 'M17 43 L10 30 H8 A5 5 0 0 1 3 25 V8 A5 5 0 0 1 8 3 H26 A5 5 0 0 1 31 8 V25 A5 5 0 0 1 26 30 H24 Z'
+  };
+
   function pinIcon(type, status, confirmed, fade) {
-    const size = confirmed ? 32 : 28;
+    const w = confirmed ? 34 : 28, h = Math.round(w * 44 / 34);
     return L.divIcon({
       className: '',
-      html: '<div class="pin ' + type + (confirmed ? '' : ' maybe') +
-            '" style="--c:' + COLORS[status] + ';opacity:' + fade + '">' + TYPE_EMOJI[type] + '</div>',
-      iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2]
+      html: '<div class="pin' + (confirmed ? '' : ' maybe') + '" style="--c:' + COLORS[status] + ';opacity:' + fade + '">' +
+            '<svg viewBox="0 0 34 44"><path d="' + PIN_PATH[type] + '"/></svg>' +
+            '<span class="em">' + TYPE_EMOJI[type] + '</span></div>',
+      iconSize: [w, h],
+      iconAnchor: [w / 2, h],       // bottom tip of the pin = the exact spot
+      popupAnchor: [0, -h]
     });
   }
 
@@ -317,7 +326,7 @@
         if (!COLORS[r.status]) return;
         const ageHours = (Date.now() - new Date(r.time).getTime()) / 3600000;
         const fade = Math.max(0.35, 1 - ageHours / SHOW_HOURS[type]);
-        L.marker([r.lat, r.lng], { icon: pinIcon(type, r.status, r.confirmed, fade) })
+        L.marker([r.lat, r.lng], { icon: pinIcon(type, r.status, r.confirmed, fade), zIndexOffset: 500 })
           .addTo(pins)
           .bindPopup(
             TYPE_NAME[type] + ': ' + LABELS[r.status] + (r.confirmed ? '' : ' (unconfirmed)') +
@@ -330,7 +339,8 @@
   }
 
 
-
+  // Get the position for a report: reuse the live tracking fix if it is fresh,
+  // otherwise ask the phone once (without forcing slow high-accuracy GPS).
   function getPosition() {
     return new Promise((resolve, reject) => {
       if (lastPos && Date.now() - lastFixTime < 30000) {
@@ -345,7 +355,7 @@
     });
   }
 
-
+  // Send a report using the phone's location
   async function report(type, status) {
     if (navigator.vibrate) navigator.vibrate(30);
     if (!API) { msg.textContent = 'Setup needed: paste your Apps Script URL into index.html.'; return; }
@@ -388,7 +398,7 @@
   }
 
 
-
+  // Undo (available for 30 seconds after a report)
   let undoTimer;
   function showUndo(id) {
     const bar = document.getElementById('undoBar');
@@ -417,7 +427,7 @@
     }
   }
 
-
+  // Support popup
   function toggleSupport(show) {
     document.getElementById('supportModal').classList.toggle('show', show);
   }
@@ -426,7 +436,7 @@
   setInterval(loadPins, 60000);
 
 
-
+  // Install-as-app support
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 </script>
 </body>
