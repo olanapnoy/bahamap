@@ -73,6 +73,29 @@
     box-shadow: 0 2px 12px rgba(0,0,0,0.35); text-align: center; font-size: 14px;
   }
   #undoBar button { background: #666; margin-left: 8px; padding: 8px 16px; }
+  #supportBtn {
+    position: absolute; top: 10px; right: 10px; z-index: 1000;
+    background: #fff; color: #c2185b; padding: 8px 12px; font-size: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+  #supportBtn:active { transform: translateY(2px); box-shadow: none; }
+  #supportModal {
+    display: none; position: fixed; inset: 0; z-index: 2000;
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center; padding: 16px;
+  }
+  #supportModal.show { display: flex; }
+  #supportBox {
+    background: #fff; border-radius: 14px; padding: 18px; max-width: 380px; width: 100%;
+    max-height: 90%; overflow: auto; font-size: 14px; color: #222;
+  }
+  #supportBox h2 { margin: 0 0 8px; font-size: 18px; }
+  #supportBox img { width: 200px; max-width: 100%; display: block; margin: 8px auto; }
+  .donate-link {
+    display: block; text-align: center; text-decoration: none; color: #fff;
+    background: #1d4ed8; padding: 12px; border-radius: 10px; font-weight: 700; margin: 8px 0;
+  }
+  .donate-link.alt { background: #0070ba; }
+  #supportBox .close { background: #666; width: 100%; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -106,6 +129,19 @@
     <button class="mabagal" onclick="report('traffic','mabagal')">Mabagal<small>Slow</small></button>
     <button class="siksikan" onclick="report('traffic','siksikan')">Siksikan<small>Heavy traffic</small></button>
     <button class="stop" onclick="report('traffic','stop')">Hindi gumagalaw<small>Standstill</small></button>
+  </div>
+</div>
+
+<button id="supportBtn" onclick="toggleSupport(true)">♥ Support</button>
+
+<div id="supportModal" onclick="if (event.target === this) toggleSupport(false)">
+  <div id="supportBox">
+    <h2>Support BahaMap</h2>
+    <p>I built BahaMap by myself because I want to make daily life a little easier and safer for Filipinos, especially during the rainy season. It is free for everyone. If it helped you, a donation supports my time and effort in keeping it running and making it better. Maraming salamat po!</p>
+    <p style="text-align:center; margin:10px 0 0">GCash: scan to send</p>
+    <img src="gcash-qr.png" alt="GCash QR code for BahaMap donations">
+    <p style="font-size:12px; color:#666">Donations are voluntary gifts. BahaMap is not a registered charity, so donations are not tax-deductible.</p>
+    <button class="close" onclick="toggleSupport(false)">Close</button>
   </div>
 </div>
 
@@ -255,6 +291,10 @@
     } catch (err) {
       msg.textContent = 'Could not undo. Try again.';
     }
+  }
+
+  function toggleSupport(show) {
+    document.getElementById('supportModal').classList.toggle('show', show);
   }
 
   loadPins();
