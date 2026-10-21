@@ -218,7 +218,7 @@
 
 
   // Your location: always tracked, and the map follows you until you pan away.
-  let meMarker = null, meCircle = null, lastPos = null;
+  let meMarker = null, meCircle = null, lastPos = null, lastFixTime = 0;
   let following = false, firstFix = true, wakeLock = null;
   const locateBtn = document.getElementById('locateBtn');
 
@@ -245,6 +245,7 @@
 
   map.on('locationfound', e => {
     lastPos = e.latlng;
+    lastFixTime = Date.now();
     locateBtn.classList.remove('busy');
     if (meMarker) {
       meMarker.setLatLng(e.latlng);
@@ -328,42 +329,62 @@
   }
 
 
-  // Send a report using the phone's GPS
-  function report(type, status) {
+  // Get the position for a report: reuse the live tracking fix if it is fresh,
+  // otherwise ask the phone once (without forcing slow high-accuracy GPS).
+  function getPosition() {
+    return new Promise((resolve, reject) => {
+      if (lastPos && Date.now() - lastFixTime < 30000) {
+        resolve({ lat: lastPos.lat, lng: lastPos.lng });
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        reject,
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+      );
+    });
+  }
+
+  // Send a report using the phone's location
+  async function report(type, status) {
     if (navigator.vibrate) navigator.vibrate(30);
     if (!API) { msg.textContent = 'Setup needed: paste your Apps Script URL into index.html.'; return; }
     msg.textContent = 'Getting your location...';
-    navigator.geolocation.getCurrentPosition(async pos => {
-      let id = '';
-      try { id = localStorage.getItem('id') || (localStorage.id = crypto.randomUUID()); } catch (e) {}
-      try {
-        const res = await fetch(API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({
-            type, status, device: id,
-            lat: pos.coords.latitude, lng: pos.coords.longitude
-          })
-        });
-        let out = {};
-        try { out = await res.json(); } catch (e) {}
-        if (out.result === 'duplicate') {
-          msg.textContent = type === 'traffic'
-            ? 'You already reported traffic here. Try again in 15 minutes.'
-            : 'You already reported this spot. Try again in 2 hours.';
-        } else if (out.result === 'invalid') {
-          msg.textContent = 'Report rejected. Check your location and try again.';
-        } else {
-          msg.textContent = 'Salamat! Report sent. Wrong button? Tap Undo.';
-          showUndo(id);
-          loadPins();
-        }
-      } catch (err) {
-        msg.textContent = 'Report not sent. Try again.';
+
+    let loc;
+    try {
+      loc = await getPosition();
+    } catch (err) {
+      msg.textContent = (err && err.code === 1)
+        ? 'Location is blocked. Allow location for this site in your browser settings, then try again.'
+        : 'Could not get your location yet. Wait a few seconds (or move to an open area) and tap again.';
+      return;
+    }
+
+    let id = '';
+    try { id = localStorage.getItem('id') || (localStorage.id = crypto.randomUUID()); } catch (e) {}
+    try {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ type, status, device: id, lat: loc.lat, lng: loc.lng })
+      });
+      let out = {};
+      try { out = await res.json(); } catch (e) {}
+      if (out.result === 'duplicate') {
+        msg.textContent = type === 'traffic'
+          ? 'You already reported traffic here. Try again in 15 minutes.'
+          : 'You already reported this spot. Try again in 2 hours.';
+      } else if (out.result === 'invalid') {
+        msg.textContent = 'Report rejected. Check your location and try again.';
+      } else {
+        msg.textContent = 'Salamat! Report sent. Wrong button? Tap Undo.';
+        showUndo(id);
+        loadPins();
       }
-    }, () => {
-      msg.textContent = 'Turn on location so we can pin your street.';
-    }, { enableHighAccuracy: true, timeout: 10000 });
+    } catch (err) {
+      msg.textContent = 'Report not sent. Try again.';
+    }
   }
 
 
