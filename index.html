@@ -8,6 +8,12 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
 <style>
   html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+  #undoBar {
+    display: none; position: absolute; left: 10px; right: 10px; bottom: 160px;
+    z-index: 1100; background: #fff; border-radius: 12px; padding: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.35); text-align: center; font-size: 14px;
+  }
+  #undoBar button { background: #666; margin-left: 8px; padding: 8px 16px; }
   #map { position: absolute; inset: 0 0 150px 0; }
   #panel {
     position: absolute; left: 0; right: 0; bottom: 0; height: 150px;
@@ -49,6 +55,10 @@
   <button class="gutter" onclick="report('gutter')">Gutter-deep<small>No sedans</small></button>
   <button class="tuhod" onclick="report('tuhod')">Hanggang tuhod<small>SUVs only</small></button>
   <button class="lubog" onclick="report('lubog')">Lubog<small>Submerged</small></button>
+</div>
+<div id="undoBar">
+  Wrong button?
+  <button onclick="undoReport()">Undo</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
@@ -123,7 +133,8 @@
         } else if (out.result === 'invalid') {
           msg.textContent = 'Report rejected. Check your location and try again.';
         } else {
-          msg.textContent = 'Salamat! Report sent.';
+          msg.textContent = 'Salamat! Report sent. Wrong button? Tap Undo.';
+          showUndo(id);
           loadPins();
         }
       } catch (err) {
@@ -132,6 +143,34 @@
     }, () => {
       msg.textContent = 'Turn on location so we can pin your street.';
     });
+  }
+
+  let undoTimer;
+  function showUndo(id) {
+    const bar = document.getElementById('undoBar');
+    bar.dataset.id = id;
+    bar.style.display = 'block';
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => { bar.style.display = 'none'; }, 30000); // 30 seconds
+  }
+
+  async function undoReport() {
+    const bar = document.getElementById('undoBar');
+    bar.style.display = 'none';
+    try {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'undo', device: bar.dataset.id })
+      });
+      const out = await res.json();
+      msg.textContent = out.result === 'undone'
+        ? 'Report removed. Tap the right button.'
+        : 'Nothing to undo.';
+      loadPins();
+    } catch (err) {
+      msg.textContent = 'Could not undo. Try again.';
+    }
   }
 
   loadPins();
