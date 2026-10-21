@@ -55,24 +55,24 @@
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
 <script>
-  // 1. PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL BETWEEN THE QUOTES
+
   const API = 'https://script.google.com/macros/s/AKfycbzGM0Ue_abbtPUflQn1EsVpezkxRPGeKrrixm1gCx5y3yzPRC1YXCaItwk_WBw9CxPG/exec';
 
   const COLORS = { lusot: '#1a8a3c', gutter: '#c79a00', tuhod: '#e07000', lubog: '#c62828' };
   const LABELS = { lusot: 'Lusot lahat', gutter: 'Gutter-deep', tuhod: 'Hanggang tuhod', lubog: 'Lubog' };
   const msg = document.getElementById('msg');
 
-  // 2. Create the map (starts near Antipolo; change the numbers to move it)
+
   const map = L.map('map').setView([14.586, 121.176], 14);
   L.maplibreGL({
     style: 'https://tiles.openfreemap.org/styles/positron',
     attribution: '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/" target="_blank">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
   }).addTo(map);
 
-  // Jump to the user's location if they allow it
+
   map.locate({ setView: true, maxZoom: 16 });
 
-  // 3. Draw the pins. Older reports look fainter.
+
   const pins = L.layerGroup().addTo(map);
 
   async function loadPins() {
@@ -100,7 +100,7 @@
     }
   }
 
-  // 4. Send a report using the phone's GPS
+
   function report(status) {
     if (navigator.vibrate) navigator.vibrate(30);
     if (!API) { msg.textContent = 'Setup needed: paste your Apps Script URL into index.html.'; return; }
@@ -135,7 +135,7 @@
   }
 
   loadPins();
-  setInterval(loadPins, 60000); // refresh every minute
+  setInterval(loadPins, 60000);
 </script>
 </body>
 </html>
