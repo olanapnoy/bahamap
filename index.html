@@ -2,67 +2,111 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BahaMap</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1d4ed8">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
 <style>
+  :root { --blue: #1d4ed8; }
   html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
-  #undoBar {
-    display: none; position: absolute; left: 10px; right: 10px; bottom: 160px;
-    z-index: 1100; background: #fff; border-radius: 12px; padding: 10px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.35); text-align: center; font-size: 14px;
-  }
-  #undoBar button { background: #666; margin-left: 8px; padding: 8px 16px; }
-  #map { position: absolute; inset: 0 0 150px 0; }
+  body { display: flex; flex-direction: column; }
+
+  #mapWrap { position: relative; flex: 1; min-height: 0; }
+  #map { position: absolute; inset: 0; }
+
   #panel {
-    position: absolute; left: 0; right: 0; bottom: 0; height: 150px;
-    background: #fff; padding: 10px; box-sizing: border-box;
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    background: #fff; padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.2); position: relative; z-index: 1000;
   }
-  #msg { grid-column: 1 / -1; font-size: 13px; color: #444; text-align: center; margin: 0; }
+  #tabs { display: flex; gap: 6px; margin-bottom: 6px; }
+  #msg { font-size: 13px; color: #444; text-align: center; margin: 0 0 8px; min-height: 16px; }
+  .grid { display: none; grid-template-columns: 1fr 1fr; gap: 8px; padding-bottom: 5px; }
+  .grid.show { display: grid; }
+
+  /* Report buttons with a press animation */
   button {
     border: 0; border-radius: 10px; font-size: 16px; font-weight: 700;
-    color: #fff; padding: 8px;
-  }
-  button small { display: block; font-weight: 400; font-size: 12px; }
-  .lusot { background: #1a8a3c; }
-  .gutter { background: #c79a00; }
-  .tuhod { background: #e07000; }
-  .lubog { background: #c62828; }
-  button {
-    cursor: pointer;
+    color: #fff; padding: 8px; cursor: pointer;
     box-shadow: 0 5px 0 rgba(0, 0, 0, 0.3);
     transition: transform 0.08s, box-shadow 0.08s, filter 0.08s;
     -webkit-tap-highlight-color: transparent;
   }
-  button:active {
-    transform: translateY(5px);
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0.3);
-    filter: brightness(0.9);
-  }
-</style>
+  button:active { transform: translateY(5px); box-shadow: 0 0 0 rgba(0,0,0,0.3); filter: brightness(0.9); }
+  button small { display: block; font-weight: 400; font-size: 12px; }
 
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1d4ed8">
-<link rel="apple-touch-icon" href="icon-192.png">
+  /* Flood colors */
+  .lusot { background: #1a8a3c; }
+  .gutter { background: #c79a00; }
+  .tuhod { background: #e07000; }
+  .lubog { background: #c62828; }
+  /* Traffic colors */
+  .maluwag { background: #2e7d32; }
+  .mabagal { background: #b8860b; }
+  .siksikan { background: #e65100; }
+  .stop { background: #8e1b1b; }
+
+  /* Tabs */
+  button.tab {
+    flex: 1; background: #e5e7eb; color: #333; box-shadow: none;
+    padding: 10px; font-size: 15px;
+  }
+  button.tab.active { background: var(--blue); color: #fff; }
+  button.tab:active { transform: none; box-shadow: none; filter: brightness(0.95); }
+
+  /* Map pins: flood = round with a drop, traffic = rounded square with a car */
+  .pin {
+    width: 100%; height: 100%; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; border: 3px solid var(--c); background: var(--c);
+  }
+  .pin.flood { border-radius: 50%; }
+  .pin.traffic { border-radius: 7px; }
+  .pin.maybe { background: #fff; border-style: dashed; }
+
+  /* Undo bar */
+  #undoBar {
+    display: none; position: absolute; left: 10px; right: 10px; bottom: 28px;
+    z-index: 1100; background: #fff; border-radius: 12px; padding: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.35); text-align: center; font-size: 14px;
+  }
+  #undoBar button { background: #666; margin-left: 8px; padding: 8px 16px; }
+</style>
 </head>
 <body>
 
-<!-- The map goes here -->
-<div id="map"></div>
-
-<!-- The four report buttons -->
-<div id="panel">
-  <p id="msg">Tap the button that matches the street you are on.</p>
-  <button class="lusot" onclick="report('lusot')">Lusot lahat<small>Passable to all</small></button>
-  <button class="gutter" onclick="report('gutter')">Gutter-deep<small>No sedans</small></button>
-  <button class="tuhod" onclick="report('tuhod')">Hanggang tuhod<small>SUVs only</small></button>
-  <button class="lubog" onclick="report('lubog')">Lubog<small>Submerged</small></button>
+<div id="mapWrap">
+  <div id="map"></div>
+  <div id="undoBar">
+    Wrong button?
+    <button onclick="undoReport()">Undo</button>
+  </div>
 </div>
-<div id="undoBar">
-  Wrong button?
-  <button onclick="undoReport()">Undo</button>
+
+<div id="panel">
+  <div id="tabs">
+    <button class="tab active" id="tab-flood" onclick="switchTab('flood')">💧 Baha</button>
+    <button class="tab" id="tab-traffic" onclick="switchTab('traffic')">🚗 Trapiko</button>
+  </div>
+  <p id="msg"></p>
+
+  <!-- Flood buttons -->
+  <div class="grid show" id="grid-flood">
+    <button class="lusot" onclick="report('flood','lusot')">Lusot lahat<small>Passable to all</small></button>
+    <button class="gutter" onclick="report('flood','gutter')">Gutter-deep<small>No sedans</small></button>
+    <button class="tuhod" onclick="report('flood','tuhod')">Hanggang tuhod<small>SUVs only</small></button>
+    <button class="lubog" onclick="report('flood','lubog')">Lubog<small>Submerged</small></button>
+  </div>
+
+  <!-- Traffic buttons -->
+  <div class="grid" id="grid-traffic">
+    <button class="maluwag" onclick="report('traffic','maluwag')">Maluwag<small>Moving freely</small></button>
+    <button class="mabagal" onclick="report('traffic','mabagal')">Mabagal<small>Slow</small></button>
+    <button class="siksikan" onclick="report('traffic','siksikan')">Siksikan<small>Heavy traffic</small></button>
+    <button class="stop" onclick="report('traffic','stop')">Hindi gumagalaw<small>Standstill</small></button>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
@@ -72,9 +116,35 @@
 
   const API = 'https://script.google.com/macros/s/AKfycbzGM0Ue_abbtPUflQn1EsVpezkxRPGeKrrixm1gCx5y3yzPRC1YXCaItwk_WBw9CxPG/exec';
 
-  const COLORS = { lusot: '#1a8a3c', gutter: '#c79a00', tuhod: '#e07000', lubog: '#c62828' };
-  const LABELS = { lusot: 'Lusot lahat', gutter: 'Gutter-deep', tuhod: 'Hanggang tuhod', lubog: 'Lubog' };
+  const COLORS = {
+    lusot: '#1a8a3c', gutter: '#c79a00', tuhod: '#e07000', lubog: '#c62828',
+    maluwag: '#2e7d32', mabagal: '#b8860b', siksikan: '#e65100', stop: '#8e1b1b'
+  };
+  const LABELS = {
+    lusot: 'Lusot lahat', gutter: 'Gutter-deep', tuhod: 'Hanggang tuhod', lubog: 'Lubog',
+    maluwag: 'Maluwag', mabagal: 'Mabagal', siksikan: 'Siksikan', stop: 'Hindi gumagalaw'
+  };
+  const TYPE_NAME = { flood: 'Baha', traffic: 'Trapiko' };
+  const TYPE_EMOJI = { flood: '💧', traffic: '🚗' };
+  const SHOW_HOURS = { flood: 3, traffic: 0.75 };
+  const HINTS = {
+    flood: 'Tap the button that matches the street you are on.',
+    traffic: 'Tap the button that matches the traffic where you are.'
+  };
+
   const msg = document.getElementById('msg');
+  let currentTab = 'flood';
+  msg.textContent = HINTS.flood;
+
+
+  function switchTab(type) {
+    currentTab = type;
+    ['flood', 'traffic'].forEach(t => {
+      document.getElementById('tab-' + t).classList.toggle('active', t === type);
+      document.getElementById('grid-' + t).classList.toggle('show', t === type);
+    });
+    msg.textContent = HINTS[type];
+  }
 
 
   const map = L.map('map').setView([14.586, 121.176], 14);
@@ -82,12 +152,20 @@
     style: 'https://tiles.openfreemap.org/styles/positron',
     attribution: '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/" target="_blank">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
   }).addTo(map);
-
-
   map.locate({ setView: true, maxZoom: 16 });
 
 
   const pins = L.layerGroup().addTo(map);
+
+  function pinIcon(type, status, confirmed, fade) {
+    const size = confirmed ? 32 : 28;
+    return L.divIcon({
+      className: '',
+      html: '<div class="pin ' + type + (confirmed ? '' : ' maybe') +
+            '" style="--c:' + COLORS[status] + ';opacity:' + fade + '">' + TYPE_EMOJI[type] + '</div>',
+      iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2]
+    });
+  }
 
   async function loadPins() {
     if (!API) { msg.textContent = 'Setup needed: paste your Apps Script URL into index.html.'; return; }
@@ -96,18 +174,16 @@
       const rows = await res.json();
       pins.clearLayers();
       rows.forEach(r => {
+        const type = r.type === 'traffic' ? 'traffic' : 'flood';
+        if (!COLORS[r.status]) return;
         const ageHours = (Date.now() - new Date(r.time).getTime()) / 3600000;
-        const fade = Math.max(0.25, 1 - ageHours / 3);
-        L.circleMarker([r.lat, r.lng], {
-          radius: r.confirmed ? 12 : 9,
-          color: COLORS[r.status], fillColor: COLORS[r.status],
-          fillOpacity: r.confirmed ? fade : 0.1,
-          opacity: fade,
-          dashArray: r.confirmed ? null : '4 4'
-        }).addTo(pins).bindPopup(
-          LABELS[r.status] + (r.confirmed ? '' : ' (unconfirmed)') +
-          '<br>' + new Date(r.time).toLocaleTimeString()
-        );
+        const fade = Math.max(0.35, 1 - ageHours / SHOW_HOURS[type]);
+        L.marker([r.lat, r.lng], { icon: pinIcon(type, r.status, r.confirmed, fade) })
+          .addTo(pins)
+          .bindPopup(
+            TYPE_NAME[type] + ': ' + LABELS[r.status] + (r.confirmed ? '' : ' (unconfirmed)') +
+            '<br>' + new Date(r.time).toLocaleTimeString()
+          );
       });
     } catch (err) {
       msg.textContent = 'Could not load reports. Check your connection.';
@@ -115,7 +191,7 @@
   }
 
 
-  function report(status) {
+  function report(type, status) {
     if (navigator.vibrate) navigator.vibrate(30);
     if (!API) { msg.textContent = 'Setup needed: paste your Apps Script URL into index.html.'; return; }
     msg.textContent = 'Getting your location...';
@@ -127,13 +203,16 @@
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({
-            lat: pos.coords.latitude, lng: pos.coords.longitude, status, device: id
+            type, status, device: id,
+            lat: pos.coords.latitude, lng: pos.coords.longitude
           })
         });
         let out = {};
         try { out = await res.json(); } catch (e) {}
         if (out.result === 'duplicate') {
-          msg.textContent = 'You already reported this spot. Try again in 2 hours.';
+          msg.textContent = type === 'traffic'
+            ? 'You already reported traffic here. Try again in 15 minutes.'
+            : 'You already reported this spot. Try again in 2 hours.';
         } else if (out.result === 'invalid') {
           msg.textContent = 'Report rejected. Check your location and try again.';
         } else {
@@ -146,8 +225,9 @@
       }
     }, () => {
       msg.textContent = 'Turn on location so we can pin your street.';
-    });
+    }, { enableHighAccuracy: true, timeout: 10000 });
   }
+
 
   let undoTimer;
   function showUndo(id) {
@@ -155,7 +235,7 @@
     bar.dataset.id = id;
     bar.style.display = 'block';
     clearTimeout(undoTimer);
-    undoTimer = setTimeout(() => { bar.style.display = 'none'; }, 30000); // 30 seconds
+    undoTimer = setTimeout(() => { bar.style.display = 'none'; }, 30000);
   }
 
   async function undoReport() {
@@ -179,9 +259,8 @@
 
   loadPins();
   setInterval(loadPins, 60000);
-</script>
 
-<script>
+
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 </script>
 </body>
